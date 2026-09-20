@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pick a mood</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #251C2B;
+    --surface: #34293C;
+    --surface-hover: #3E3147;
+    --accent: #F2997D;
+    --accent-dim: #C97C64;
+    --success: #8FBFA5;
+    --text: #F5EDE6;
+    --text-muted: #B9A9BE;
+    --border: #46394F;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Work Sans', sans-serif;
+    display: flex;
+    justify-content: center;
+    padding: 48px 20px 32px;
+  }
+
+  .wrap {
+    width: 100%;
+    max-width: 440px;
+  }
+
+  h1 {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 30px;
+    line-height: 1.25;
+    margin: 0 0 8px;
+  }
+
+  .sub {
+    color: var(--text-muted);
+    font-size: 15px;
+    margin: 0 0 32px;
+    line-height: 1.5;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .mood-btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    color: var(--text);
+    font-family: 'Work Sans', sans-serif;
+    font-size: 15px;
+    font-weight: 500;
+    padding: 20px 14px;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.15s ease, transform 0.1s ease;
+    position: relative;
+    min-height: 64px;
+  }
+
+  .mood-btn:hover { background: var(--surface-hover); }
+  .mood-btn:active { transform: scale(0.98); }
+
+  .mood-btn.active-mood {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
+  }
+
+  .mood-btn.sending {
+    color: var(--text-muted);
+  }
+
+  .mood-btn .status {
+    display: block;
+    font-size: 12px;
+    color: var(--success);
+    margin-top: 4px;
+    font-weight: 400;
+    min-height: 16px;
+  }
+
+  .empty, .error {
+    color: var(--text-muted);
+    font-size: 14px;
+    padding: 24px 0;
+  }
+
+  .error { color: var(--accent); }
+
+  /* --- Setup panel (shown until a token is saved) --- */
+  .setup {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px;
+    margin-bottom: 28px;
+  }
+
+  .setup p {
+    font-size: 14px;
+    color: var(--text-muted);
+    line-height: 1.6;
+    margin: 0 0 14px;
+  }
+
+  .setup a { color: var(--accent); }
+
+  .setup input {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    padding: 10px 12px;
+    font-size: 14px;
+    font-family: 'Work Sans', sans-serif;
+    margin-bottom: 10px;
+  }
+
+  .setup button {
+    background: var(--accent);
+    border: none;
+    border-radius: 8px;
+    color: #251C2B;
+    font-family: 'Work Sans', sans-serif;
+    font-weight: 600;
+    font-size: 14px;
+    padding: 10px 16px;
+    cursor: pointer;
+    width: 100%;
+  }
+
+  .footer-link {
+    display: block;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 13px;
+    margin-top: 28px;
+    text-decoration: none;
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>What's the mood today?</h1>
+    <p class="sub">Pick one and it'll show up on his screen shortly.</p>
+
+    <div id="setup" class="setup" style="display:none;">
+      <p>
+        First time here — this page needs a GitHub token to update your repo.
+        <a href="https://github.com/settings/personal-access-tokens/new" target="_blank">Create a fine-grained token</a>
+        scoped to just the <strong>mood-screen-buddy</strong> repo with
+        <strong>Contents: Read and write</strong> permission, then paste it below.
+        It's saved only in this browser.
+      </p>
+      <input id="tokenInput" type="password" placeholder="Paste your GitHub token">
+      <button onclick="saveToken()">Save and continue</button>
+    </div>
+
+    <div id="grid" class="grid" style="display:none;"></div>
+    <div id="empty" class="empty" style="display:none;"></div>
+
+    <a class="footer-link" href="#" onclick="resetToken(); return false;">Reset saved token</a>
+  </div>
+
+<script>
+  const OWNER = "nidhut04-crypto";
+  const REPO = "mood-screen-buddy";
+  const GIFS_PATH = "gifs";
+  const MANIFEST_PATH = "gifs/manifest.json";
+  const API_BASE = `https://api.github.com/repos/${OWNER}/${REPO}/contents`;
+
+  function getToken() { return localStorage.getItem("moodScreenToken"); }
+  function saveToken() {
+    const val = document.getElementById("tokenInput").value.trim();
+    if (!val) return;
+    localStorage.setItem("moodScreenToken", val);
+    init();
+  }
+  function resetToken() {
+    localStorage.removeItem("moodScreenToken");
+    init();
+  }
+
+  function labelFromFilename(name) {
+    return name
+      .replace(/\.gif$/i, "")
+      .replace(/[-_]/g, " ")
+      .replace(/\b\w/g, c => c.toUpperCase());
+  }
+
+  async function init() {
+    const token = getToken();
+    const setupEl = document.getElementById("setup");
+    const gridEl = document.getElementById("grid");
+    const emptyEl = document.getElementById("empty");
+
+    if (!token) {
+      setupEl.style.display = "block";
+      gridEl.style.display = "none";
+      emptyEl.style.display = "none";
+      return;
+    }
+
+    setupEl.style.display = "none";
+    gridEl.style.display = "grid";
+    emptyEl.style.display = "none";
+    gridEl.innerHTML = "<p class='empty'>Loading moods…</p>";
+
+    try {
+      const [filesRes, manifestRes] = await Promise.all([
+        fetch(`${API_BASE}/${GIFS_PATH}`, { headers: authHeaders(token) }),
+        fetch(`${API_BASE}/${MANIFEST_PATH}`, { headers: authHeaders(token) })
+      ]);
+
+      if (!filesRes.ok) throw new Error("Couldn't list files (check your token's repo access).");
+      const files = await filesRes.json();
+      const gifFiles = files.filter(f => f.name.toLowerCase().endsWith(".gif"));
+
+      let currentActive = null;
+      if (manifestRes.ok) {
+        const manifestData = await manifestRes.json();
+        const decoded = JSON.parse(atob(manifestData.content));
+        currentActive = decoded.active;
+      }
+
+      if (gifFiles.length === 0) {
+        gridEl.style.display = "none";
+        emptyEl.style.display = "block";
+        emptyEl.textContent = "No GIFs found in /gifs yet — upload some to GitHub first.";
+        return;
+      }
+
+      gridEl.innerHTML = "";
+      gifFiles.forEach(f => {
+        const btn = document.createElement("button");
+        btn.className = "mood-btn" + (f.name === currentActive ? " active-mood" : "");
+        btn.innerHTML = `${labelFromFilename(f.name)}<span class="status"></span>`;
+        btn.onclick = () => setActiveMood(f.name, btn);
+        gridEl.appendChild(btn);
+      });
+    } catch (err) {
+      gridEl.style.display = "none";
+      emptyEl.style.display = "block";
+      emptyEl.className = "error";
+      emptyEl.textContent = "Something went wrong: " + err.message;
+    }
+  }
+
+  function authHeaders(token) {
+    return {
+      "Authorization": `Bearer ${token}`,
+      "Accept": "application/vnd.github+json"
+    };
+  }
+
+  async function setActiveMood(filename, btnEl) {
+    const token = getToken();
+    const statusEl = btnEl.querySelector(".status");
+    btnEl.classList.add("sending");
+    statusEl.textContent = "Sending…";
+
+    try {
+      // 1. Get the current manifest's SHA + version (required to update it)
+      const getRes = await fetch(`${API_BASE}/${MANIFEST_PATH}`, { headers: authHeaders(token) });
+      if (!getRes.ok) throw new Error("Couldn't read current manifest.");
+      const current = await getRes.json();
+      const currentData = JSON.parse(atob(current.content));
+      const newVersion = (currentData.version || 0) + 1;
+
+      // 2. Build the new manifest content
+      const newManifest = { active: filename, version: newVersion };
+      const encodedContent = btoa(JSON.stringify(newManifest, null, 2));
+
+      // 3. Push the update
+      const putRes = await fetch(`${API_BASE}/${MANIFEST_PATH}`, {
+        method: "PUT",
+        headers: { ...authHeaders(token), "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: `Update mood to ${filename}`,
+          content: encodedContent,
+          sha: current.sha
+        })
+      });
+
+      if (!putRes.ok) throw new Error("Update failed — check token permissions.");
+
+      statusEl.textContent = "Sent ✓";
+      document.querySelectorAll(".mood-btn").forEach(b => b.classList.remove("active-mood"));
+      btnEl.classList.add("active-mood");
+    } catch (err) {
+      statusEl.textContent = "Failed: " + err.message;
+    } finally {
+      btnEl.classList.remove("sending");
+    }
+  }
+
+  init();
+</script>
+</body>
+</html>
